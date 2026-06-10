@@ -559,10 +559,10 @@ function nNoteVoicings(rootPc, iv, n){
   let tones = n===3 ? [0,third,(seventh??fifth)] : [0,third,fifth,seventh];
   tones=[...new Set(tones.filter(t=>t!==null&&t!==undefined))];
   const pcs=tones.map(t=>(rootPc+t)%12);
-  const voicings=[];
+  const voicings=[], seen=new Set();
   for(let start=0; start+n<=6; start++){
-    let best=null;
-    for(let inv=0; inv<pcs.length; inv++){
+    const found=[];
+    for(let inv=0; inv<pcs.length; inv++){ // 每組弦列出所有轉位（含 CCM 常用中把位）
       const order=[...pcs.slice(inv),...pcs.slice(0,inv)];
       const seq=[]; for(let k=0;k<n;k++)seq.push(order[k%order.length]);
       for(let f0=0; f0<=fretCount(); f0++){
@@ -579,15 +579,17 @@ function nNoteVoicings(rootPc, iv, n){
         if(!ok)continue;
         const fpos=frets.filter(x=>x>0);
         if(fpos.length&&Math.max(...fpos)-Math.min(...fpos)>4)continue;
-        const pos=Math.min(...frets);
-        if(!best||pos<best.pos)best={frets,pos,invTone:tones[inv]};
-        break; // 此轉位最低把位已找到
+        found.push({frets, pos:Math.min(...frets), invTone:tones[inv]});
+        break; // 此轉位的最低把位
       }
     }
-    if(best){
+    found.sort((a,b)=>a.pos-b.pos);
+    for(const v of found){
       const full=Array(6).fill(-1);
-      best.frets.forEach((fr,k)=>full[start+k]=fr);
-      const invName=best.invTone===0?'原位':best.invTone===third?'第一轉位':best.invTone===fifth?'第二轉位':'第三轉位';
+      v.frets.forEach((fr,k)=>full[start+k]=fr);
+      const key=full.join(',');
+      if(seen.has(key))continue; seen.add(key);
+      const invName=v.invTone===0?'原位':v.invTone===third?'第一轉位':v.invTone===fifth?'第二轉位':'第三轉位';
       voicings.push({frets:full, label:`${6-start}–${6-start-n+1}弦・${invName}`});
     }
   }
@@ -600,7 +602,9 @@ function renderQuery(){
   renderBoard();
   const name=pretty(pcName(rootPc))+sx;
   $('chordInfo').innerHTML=`<div class="det"><span class="nm">${name}</span><span class="tag">${f.name}</span><br>`+
-    f.iv.map(x=>`<span class="iv-tone"><b>${pretty(pcName((rootPc+x)%12))}</b><small>${IV_NAME[x]}</small></span>`).join('')+'</div>';
+    f.iv.map(x=>`<span class="iv-tone"><b>${pretty(pcName((rootPc+x)%12))}</b><small>${IV_NAME[x]}</small></span>`).join('')+
+    `<br><span class="tag">調內級數（${pretty(keyTonic)} ${keyMode==='major'?'大調':'小調'}）：</span>`+
+    f.iv.map(x=>{const pc=(rootPc+x)%12;return `<b style="color:var(--lavender)">${pretty(pcName(pc))}=${degLabel(pc)}</b>`;}).join('　')+'</div>';
   let vs, extra='', empty='此和弦類型暫無內建指型圖，組成音已標示於上方指板。';
   if(instrument==='electric'&&voiceMode!=='std'){
     const r=nNoteVoicings(rootPc, f.iv, +voiceMode);
@@ -615,7 +619,7 @@ function renderQuery(){
     }).filter(v=>Math.max(...v.frets)<=fretCount());
   }
   $('diagrams').innerHTML=extra+(vs.length?vs.map(v=>
-    `<div class="dia" data-frets="${v.frets.join(',')}">${diagramSVG(v.frets,rootPc)}<div class="cap">${v.label}<br>${v.frets.map(x=>x<0?'×':x).join(' - ')}　🔊</div></div>`
+    `<div class="dia" data-frets="${v.frets.join(',')}">${diagramSVG(v.frets,rootPc)}<div class="cap"><b style="color:var(--lavender);font-size:14.5px">${voicingDeg(v.frets,rootPc)}</b>　${v.label}<br>${v.frets.map(x=>x<0?'×':x).join(' - ')}　🔊</div></div>`
   ).join(''):`<div class="hint">${empty}</div>`);
   syncDegFromChord(); // 和弦 → 級數 同步
 }
@@ -737,8 +741,8 @@ function refreshKeySelects(){
   KEY_SELS.forEach(id=>{$(id).innerHTML=opts;$(id).value=keyTonic;});
   MODE_SEGS.forEach(id=>$(id).querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.mode===keyMode)));
 }
-function setKeyMode(m){ keyMode=m; refreshKeySelects(); renderKeyPage(); updateFbScaleInfo(); convertNow(); refreshDegSel(); syncDegFromChord(); }
-function setKeyTonic(t){ keyTonic=t; KEY_SELS.forEach(id=>$(id).value=t); renderKeyPage(); updateFbScaleInfo(); convertNow(); refreshDegSel(); syncDegFromChord(); }
+function setKeyMode(m){ keyMode=m; refreshKeySelects(); renderKeyPage(); updateFbScaleInfo(); convertNow(); refreshDegSel(); if($('chordInfo').innerHTML)renderQuery(); else syncDegFromChord(); }
+function setKeyTonic(t){ keyTonic=t; KEY_SELS.forEach(id=>$(id).value=t); renderKeyPage(); updateFbScaleInfo(); convertNow(); refreshDegSel(); if($('chordInfo').innerHTML)renderQuery(); else syncDegFromChord(); }
 function updateFbScaleInfo(){
   $('fbScaleInfo').textContent='調內音：'+spellScale(keyTonic,keyMode).map(pretty).join(' ');
 }
@@ -830,6 +834,13 @@ function parseChordToken(tok){
 function degLabel(pc){
   const off=(pc-parseNote(keyTonic)+12)%12;
   return (keyMode==='major'?DEG_MAJ_MAP:DEG_MIN_MAP)[off];
+}
+/* 指型的級數標示：根音級數＋（轉位時）/低音級數，如 6、6/1、6/3 */
+function voicingDeg(frets, rootPc){
+  let bassPc=null;
+  for(let i=0;i<6;i++){ if(frets[i]>=0){ bassPc=(SM_LOW[i]+frets[i])%12; break; } }
+  const r=degLabel(rootPc);
+  return (bassPc===null||bassPc===rootPc)? r : r+'/'+degLabel(bassPc);
 }
 const SUP={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
 const supNum=t=>t.replace(/[0-9]/g,d=>SUP[d]); // 5⁷ 不會誤讀成 57
