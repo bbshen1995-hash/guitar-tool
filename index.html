@@ -214,8 +214,13 @@ label.act{display:inline-block;}
         <select id="typeSel"></select>
         <div class="seg" id="voiceSeg" title="和弦要用幾個音（電吉他）">
           <button data-v="std" class="active">標準指型</button>
+          <button data-v="2">2音</button>
           <button data-v="3">3音</button>
           <button data-v="4">4音</button>
+        </div>
+        <div class="seg" id="dotSeg" title="指型圖音點顯示方式">
+          <button data-d="deg" class="active">級數</button>
+          <button data-d="name">音名</button>
         </div>
         <button class="act" id="playQuery">▶ 播放和弦</button>
         <button class="act" id="clearHl">清除標示</button>
@@ -535,7 +540,7 @@ function diagramSVG(frets, rootPc){
   for(let i=0;i<6;i++){
     const f=frets[i], x=left+i*cw;
     if(f<0){ s+=`<text x="${x}" y="${top-10}" text-anchor="middle" font-size="12" fill="#8C8678">✕</text>`; continue; }
-    const pc=(SM_LOW[i]+f)%12, nm=pretty(pcName(pc));
+    const pc=(SM_LOW[i]+f)%12, nm=dotMode==='deg'?degLabel(pc):pretty(pcName(pc));
     if(f===0){
       s+=`<circle cx="${x}" cy="${top-15}" r="9" fill="none" stroke="${pc===rootPc?'#C47C6A':'#A89F8D'}"/>`+
          `<text x="${x}" y="${top-11.5}" text-anchor="middle" font-size="8.5" fill="${pc===rootPc?'#C47C6A':'#6B6557'}">${nm}</text>`;
@@ -547,8 +552,8 @@ function diagramSVG(frets, rootPc){
   }
   return s+'</svg>';
 }
-/* 3音／4音精簡指型（電吉他）：在相鄰弦組上演算密集排列 voicing */
-let voiceMode='std';
+/* 2音／3音／4音精簡指型（電吉他）：在相鄰弦組上演算密集排列 voicing */
+let voiceMode='std', dotMode='deg';
 function pickTones(iv){
   const third=[4,3,5,2].find(x=>iv.includes(x))??null;
   const fifth=[7,6,8].find(x=>iv.includes(x))??null;
@@ -608,7 +613,21 @@ function renderQuery(){
     `<br><span class="tag">調內級數（${pretty(keyTonic)} ${keyMode==='major'?'大調':'小調'}）：</span>`+
     f.iv.map(x=>{const pc=(rootPc+x)%12;return `<b style="color:var(--lavender)">${pretty(pcName(pc))}=${degLabel(pc)}</b>`;}).join('　')+'</div>';
   let vs, extra='', empty='此和弦類型暫無內建指型圖，組成音已標示於上方指板。';
-  if(instrument==='electric'&&voiceMode!=='std'){
+  if(instrument==='electric'&&voiceMode==='2'){ // 雙音：自 3 音指型去除中間音
+    const r=nNoteVoicings(rootPc, f.iv, 3);
+    const seen2=new Set();
+    vs=[];
+    for(const v of r.voicings){
+      const frets=[...v.frets];
+      const idxs=frets.map((x,i)=>x>=0?i:-1).filter(i=>i>=0);
+      if(idxs.length!==3)continue;
+      frets[idxs[1]]=-1;
+      const key=frets.join(','); if(seen2.has(key))continue; seen2.add(key);
+      vs.push({frets, label:`${6-idxs[0]}弦＋${6-idxs[2]}弦・雙音`});
+    }
+    extra=`<div class="hint" style="width:100%">2音雙音（double-stop）：自 3 音指型去除中間音，作為雙音和弦使用<br>⭐＝CCM／敬拜常用把位（高音弦組、約 4–8 格的中把位）</div>`;
+    empty='在此弦組範圍內找不到合適的雙音指型。';
+  }else if(instrument==='electric'&&voiceMode!=='std'){
     const r=nNoteVoicings(rootPc, f.iv, +voiceMode);
     vs=r.voicings;
     extra=`<div class="hint" style="width:100%">${voiceMode}音精簡指型（各弦組全部轉位，由低至高把位）・使用音：${r.used.map(t=>IV_NAME[t]).join('、')}${r.omitted?'，其餘音省略':''}<br>⭐＝CCM／敬拜常用把位（高音弦組、約 4–8 格的中把位）</div>`;
@@ -630,6 +649,7 @@ function renderQuery(){
   syncDegFromChord(); // 和弦 → 級數 同步
 }
 segHandler('voiceSeg',d=>{ voiceMode=d.v; renderQuery(); });
+segHandler('dotSeg',d=>{ dotMode=d.d; if($('chordInfo').innerHTML)renderQuery(); });
 $('rootSel').addEventListener('change',renderQuery);
 $('typeSel').addEventListener('change',renderQuery);
 $('diagrams').addEventListener('click',e=>{
