@@ -222,6 +222,10 @@ label.act{display:inline-block;}
           <button data-d="deg" class="active">級數</button>
           <button data-d="name">音名</button>
         </div>
+        <div class="seg" id="acVoiceSeg" title="木吉他指型類型" style="display:none">
+          <button data-av="std" class="active">標準指型</button>
+          <button data-av="ost">頑固音指型</button>
+        </div>
         <button class="act" id="playQuery">▶ 播放和弦</button>
         <button class="act" id="clearHl">清除標示</button>
       </div>
@@ -553,7 +557,18 @@ function diagramSVG(frets, rootPc){
   return s+'</svg>';
 }
 /* 2音／3音／4音精簡指型（電吉他）：在相鄰弦組上演算密集排列 voicing */
-let voiceMode='std', dotMode='deg';
+let voiceMode='std', dotMode='deg', acVoiceMode='std';
+/* 木吉他頑固音指型：固定開放弦作持續音（drone），依根音+類型查表 */
+const OSTINATO={
+  '7|' :[ {frets:[-1,5,4,0,3,0], tip:'D 低音・maj7/6 色彩'},
+          {frets:[3,-1,0,0,3,3], tip:'G5 drone（無三音）'} ],
+  '0|' :[ {frets:[-1,3,2,0,3,3], tip:'add9（經典 Cadd9）'} ],
+  '2|' :[ {frets:[-1,-1,0,2,3,3], tip:'sus4 色彩'} ],
+  '5|' :[ {frets:[-1,-1,3,2,1,0], tip:'maj7 色彩（開放E）'} ],
+  '4|m':[ {frets:[0,2,0,0,3,3], tip:'m7 色彩（Em7 drone）'} ],
+  '9|m':[ {frets:[-1,7,5,0,0,0], tip:'高把位＋開放弦'},
+          {frets:[-1,0,7,5,0,0], tip:'add9 色彩'} ],
+};
 function pickTones(iv){
   const third=[4,3,5,2].find(x=>iv.includes(x))??null;
   const fifth=[7,6,8].find(x=>iv.includes(x))??null;
@@ -632,6 +647,10 @@ function renderQuery(){
     vs=r.voicings;
     extra=`<div class="hint" style="width:100%">${voiceMode}音精簡指型（各弦組全部轉位，由低至高把位）・使用音：${r.used.map(t=>IV_NAME[t]).join('、')}${r.omitted?'，其餘音省略':''}<br>⭐＝CCM／敬拜常用把位（高音弦組、約 4–8 格的中把位）</div>`;
     empty='在此弦組範圍內找不到合適的精簡指型。';
+  }else if(instrument==='acoustic'&&acVoiceMode==='ost'){
+    vs=(OSTINATO[`${rootPc}|${sx}`]||[]).map(e=>({frets:e.frets, label:e.tip}));
+    extra=`<div class="hint" style="width:100%">頑固音指型：固定的開放弦作為持續音（drone），和弦移動時保有共同音，常用於民謠／敬拜木吉他伴奏。</div>`;
+    empty='此和弦暫無內建頑固音指型（常見於 G、C、D、F、Em、Am 等開放和弦）。';
   }else{
     const tpls=TEMPLATES[sx]||[];
     vs=tpls.map(t=>{
@@ -650,6 +669,7 @@ function renderQuery(){
 }
 segHandler('voiceSeg',d=>{ voiceMode=d.v; renderQuery(); });
 segHandler('dotSeg',d=>{ dotMode=d.d; if($('chordInfo').innerHTML)renderQuery(); });
+segHandler('acVoiceSeg',d=>{ acVoiceMode=d.av; renderQuery(); });
 $('rootSel').addEventListener('change',renderQuery);
 $('typeSel').addEventListener('change',renderQuery);
 $('diagrams').addEventListener('click',e=>{
@@ -1161,9 +1181,14 @@ segHandler('instSeg',d=>{
   document.body.className=instrument;
   selected=new Set([...selected].filter(k=>+k.split(':')[1]<=fretCount()));
   $('voiceSeg').style.display=instrument==='electric'?'':'none';
+  $('acVoiceSeg').style.display=instrument==='acoustic'?'':'none';
   if(instrument!=='electric'&&voiceMode!=='std'){
     voiceMode='std';
     $('voiceSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.v==='std'));
+  }
+  if(instrument!=='acoustic'&&acVoiceMode!=='std'){
+    acVoiceMode='std';
+    $('acVoiceSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.av==='std'));
   }
   renderBoard(); renderDetection();
   if($('chordInfo').innerHTML)renderQuery();
