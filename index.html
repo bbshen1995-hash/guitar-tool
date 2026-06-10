@@ -149,8 +149,8 @@ label.act{display:inline-block;}
 <header>
   <h1>🎸 吉他學習工具</h1>
   <div class="seg" id="instSeg">
-    <button data-inst="electric" class="active">⚡ 電吉他 22格</button>
-    <button data-inst="acoustic">🪵 木吉他 20格</button>
+    <button data-inst="electric" class="active">電吉他 22格</button>
+    <button data-inst="acoustic">木吉他 20格</button>
   </div>
   <div class="seg" id="accSeg" title="音名顯示方式">
     <button data-acc="sharp" class="active">♯</button>
@@ -173,6 +173,10 @@ label.act{display:inline-block;}
       <button data-mode="minor">小調</button>
     </div>
     <select id="fbKeySel"></select>
+    <div class="seg" id="fbDispSeg" title="指板音格顯示方式">
+      <button data-fd="name" class="active">音名</button>
+      <button data-fd="deg">級數</button>
+    </div>
     <button class="act" id="fbShowScale">標示調內音</button>
     <button class="act" id="fbClearScale">清除</button>
     <span class="hint" id="fbScaleInfo" style="margin:0"></span>
@@ -374,6 +378,7 @@ const TEMPLATES={
 /* ================= 狀態 ================= */
 let instrument='electric';
 let accMode='sharp';
+let fbDispMode='name'; // 指板顯示：name=音名, deg=調內級數
 let selected=new Set();      // "string:fret"
 let savedChords=[];
 let hlSet=new Set();
@@ -432,7 +437,7 @@ function renderBoard(){
       if(selected.has(s+':'+f)) cls+=' sel';
       else if(hlRoot!==null&&pc===hlRoot) cls+=' hl-root';
       else if(hlSet.has(pc)) cls+=' hl-tone';
-      h+=`<div class="${cls}" data-s="${s}" data-f="${f}"><span class="note">${pretty(pcName(pc))}</span></div>`;
+      h+=`<div class="${cls}" data-s="${s}" data-f="${f}"><span class="note">${fbDispMode==='deg'?degLabel(pc):pretty(pcName(pc))}</span></div>`;
     }
   }
   h+='<div class="flabel"></div>';
@@ -796,6 +801,7 @@ function setKeyMode(m){ keyMode=m; refreshKeySelects(); renderKeyPage(); updateF
 function setKeyTonic(t){ keyTonic=t; KEY_SELS.forEach(id=>$(id).value=t); renderKeyPage(); updateFbScaleInfo(); convertNow(); refreshDegSel(); if($('chordInfo').innerHTML)renderQuery(); else syncDegFromChord(); }
 function updateFbScaleInfo(){
   $('fbScaleInfo').textContent='調內音：'+spellScale(keyTonic,keyMode).map(pretty).join(' ');
+  if(fbDispMode==='deg')renderBoard(); // 級數模式下換調即重算指板數字
 }
 function applyScaleHl(){
   const sc=spellScale(keyTonic,keyMode);
@@ -857,6 +863,7 @@ segHandler('qKindSeg',d=>{
 });
 $('fbShowScale').onclick=applyScaleHl;
 $('fbClearScale').onclick=()=>{ hlRoot=null; hlSet=new Set(); renderBoard(); };
+segHandler('fbDispSeg',d=>{ fbDispMode=d.fd; renderBoard(); });
 
 /* ================= 和弦譜 → 級數譜 ================= */
 const SUF={'':{},'maj':{},'M':{},
