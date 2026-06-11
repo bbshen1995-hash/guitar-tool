@@ -694,6 +694,29 @@ function renderQuery(){
       const n3=(rootPc-7+12)%12, n4=(rootPc-2+12)%12;
       if(n3+3<=fretCount())vs.push({frets:[-1,-1,-1,n3,n3+3,n3+3], label:'1-5-1・根音3弦', forceCcm:true});
       if(n4+3<=fretCount())vs.push({frets:[-1,-1,n4,n4+2,n4+3,-1], label:'1-5-1・根音4弦', forceCcm:true});
+      // CCM 4–2弦三和弦系統（全調性）：一轉／原位＋七和弦色彩版（毋須切換到 7th 類型）
+      if(sx===''||sx==='m'){
+        const fc=fretCount();
+        const add=(frets,label)=>{ if(Math.max(...frets)<=fc)vs.push({frets,label,forceCcm:true}); };
+        let k=(rootPc-11+12)%12; if(k<1)k+=12;   // 根音在2弦的把位
+        let m0=(rootPc-2+12)%12; if(m0<2)m0+=12; // 根音在4弦的把位
+        let p=(rootPc+5)%12; if(p<2)p+=12;       // 5度在4弦（無根音7th）
+        if(sx==='m'){
+          add([-1,-1,k,k-1,k,-1],'CCM・一轉（根音2弦）');
+          add([-1,-1,p,p-2,p-1,-1],'CCM・m7 無根音');
+          add([-1,-1,m0,m0-2,m0-2,-1],'CCM・原位（根音4弦）');
+          add([-1,-1,m0,m0-2,m0+1,-1],'CCM・m7 shell');
+        }else{
+          add([-1,-1,k+1,k-1,k,-1],'CCM・一轉（根音2弦）');
+          add([-1,-1,p,p-1,p,-1],'CCM・maj7 無根音');
+          add([-1,-1,m0,m0-1,m0-2,-1],'CCM・原位（根音4弦）');
+          add([-1,-1,m0,m0-1,m0+2,-1],'CCM・maj7 shell');
+        }
+      }
+      // 同指型去重（CCM 版優先保留）
+      const dd=new Map();
+      for(const v of vs){ const key=v.frets.join(','); if(!dd.has(key)||v.forceCcm)dd.set(key,v); }
+      vs=[...dd.values()];
     }
     vs.forEach(v=>{ // 排序權重：⭐CCM → 根音在 3/4 弦 → 把位低至高
       const fIdx=v.frets.findIndex(x=>x>=0);
