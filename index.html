@@ -160,6 +160,7 @@ label.act{display:inline-block;}
     <button data-page="fb" class="active">指板與和弦</button>
     <button data-page="key">調性系統</button>
     <button data-page="conv">級數譜</button>
+    <button data-page="sp">特殊指型</button>
   </div>
 </header>
 
@@ -303,6 +304,18 @@ label.act{display:inline-block;}
     <textarea id="srcText" placeholder="在此貼上和弦譜，或點「上傳和弦譜」選擇 .txt 檔，例如：&#10;&#10;C        G/B      Am&#10;夜空中的星星輕輕閃爍…"></textarea>
     <div class="chips" id="mapChips"></div>
     <div class="out-pre" id="outPre"></div>
+  </div>
+</section>
+
+<!-- ============ 頁面四：特殊指型 ============ -->
+<section id="page-sp" hidden>
+  <div class="panel">
+    <div class="qrow">
+      <h2 style="margin:0">特殊指型</h2>
+      <select id="spSel"></select>
+    </div>
+    <div class="hint">歌曲／風格專用指型組。點指型圖可發聲；音點依指型組所屬調性顯示級數（可用「級數／音名」切換）。</div>
+    <div id="spDiagrams" style="display:flex;gap:14px;flex-wrap:wrap"></div>
   </div>
 </section>
 
@@ -1258,6 +1271,41 @@ $('dlOut').onclick=()=>{
   a.download='級數譜.txt'; a.click(); URL.revokeObjectURL(a.href);
 };
 
+/* ================= 特殊指型 ================= */
+const SPECIAL=[
+  {name:'Hillsong Oceans（D 大調）', key:'D', mode:'major', shapes:[
+    {deg:'1',    frets:[10,-1,0,11,-1,-1]},
+    {deg:'1 sus',frets:[10,-1,0,12,-1,-1]},
+    {deg:'2',    frets:[12,-1,0,12,-1,-1]},
+    {deg:'3',    frets:[2,-1,0,2,-1,-1]},
+    {deg:'4',    frets:[3,-1,0,4,-1,-1]},
+    {deg:'5',    frets:[5,-1,0,6,-1,-1]},
+    {deg:'5 sus',frets:[5,-1,0,7,-1,-1]},
+    {deg:'6',    frets:[7,-1,0,7,-1,-1]},
+    {deg:'5/7',  frets:[10,-1,0,10,-1,-1]},
+  ]},
+];
+function initSpSel(){
+  $('spSel').innerHTML=SPECIAL.map((c,i)=>`<option value="${i}">${c.name}</option>`).join('');
+}
+function renderSpecial(){
+  const col=SPECIAL[+$('spSel').value];
+  const savedT=keyTonic, savedM=keyMode;
+  keyTonic=col.key; keyMode=col.mode; // 以指型組的調性計算級數顯示
+  const scale=spellScale(col.key,col.mode);
+  $('spDiagrams').innerHTML=col.shapes.map(s=>{
+    const rootPc=parseNote(scale[parseInt(s.deg)-1]);
+    return `<div class="dia" data-frets="${s.frets.join(',')}">${diagramSVG(s.frets,rootPc)}`+
+      `<div class="cap"><b style="color:var(--lavender);font-size:15px">${s.deg}</b><br>${s.frets.map(x=>x<0?'×':x).join(' - ')}　🔊</div></div>`;
+  }).join('');
+  keyTonic=savedT; keyMode=savedM;
+}
+$('spSel').addEventListener('change',renderSpecial);
+$('spDiagrams').addEventListener('click',e=>{
+  const dia=e.target.closest('.dia'); if(!dia)return;
+  strum(dia.dataset.frets.split(',').map(Number).map((f,i)=>f<0?null:SM_LOW[i]+f).filter(m=>m!==null));
+});
+
 /* ================= 切換控制 ================= */
 function segHandler(segId,cb){
   $(segId).addEventListener('click',e=>{
@@ -1267,7 +1315,7 @@ function segHandler(segId,cb){
   });
 }
 function switchPage(p){
-  ['fb','key','conv'].forEach(x=>$('page-'+x).hidden=x!==p);
+  ['fb','key','conv','sp'].forEach(x=>$('page-'+x).hidden=x!==p);
   $('pageSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));
 }
 segHandler('instSeg',d=>{
@@ -1301,6 +1349,7 @@ segHandler('modeSeg',d=>setKeyMode(d.mode));
 initQuerySelects(); refreshKeySelects(); updateFbScaleInfo();
 renderBoard(); renderDetection(); renderKeyPage(); convertNow();
 refreshDegSel(); syncDegFromChord();
+initSpSel(); renderSpecial();
 </script>
 </body>
 </html>
