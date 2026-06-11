@@ -351,14 +351,14 @@ const FORMULAS=[
 
 /* 指型模板：frets 由第6弦→第1弦，-1=悶音；base=模板根音的音高類(E形=4, A形=9) */
 const TEMPLATES={
-  ''      :[{base:4,frets:[0,2,2,1,0,0],label:'E 形'},{base:9,frets:[-1,0,2,2,2,0],label:'A 形'},{base:2,frets:[-1,-1,0,2,3,2],label:'D 形'}],
-  'm'     :[{base:4,frets:[0,2,2,0,0,0],label:'E 形'},{base:9,frets:[-1,0,2,2,1,0],label:'A 形'}],
-  '7'     :[{base:4,frets:[0,2,0,1,0,0],label:'E 形'},{base:9,frets:[-1,0,2,0,2,0],label:'A 形'}],
-  'maj7'  :[{base:4,frets:[0,2,1,1,0,0],label:'E 形'},{base:9,frets:[-1,0,2,1,2,0],label:'A 形'}],
-  'm7'    :[{base:4,frets:[0,2,0,0,0,0],label:'E 形'},{base:9,frets:[-1,0,2,0,1,0],label:'A 形'}],
+  ''      :[{base:4,frets:[0,2,2,1,0,0],label:'E 形'},{base:9,frets:[-1,0,2,2,2,0],label:'A 形'},{base:2,frets:[-1,-1,0,2,3,2],label:'D 形'},{base:0,frets:[-1,3,2,0,1,0],label:'C 形'},{base:7,frets:[3,2,0,0,0,3],label:'G 形'}],
+  'm'     :[{base:4,frets:[0,2,2,0,0,0],label:'E 形'},{base:9,frets:[-1,0,2,2,1,0],label:'A 形'},{base:2,frets:[-1,-1,0,2,3,1],label:'Dm 形'}],
+  '7'     :[{base:4,frets:[0,2,0,1,0,0],label:'E 形'},{base:9,frets:[-1,0,2,0,2,0],label:'A 形'},{base:7,frets:[3,2,0,0,0,1],label:'G7 形'},{base:0,frets:[-1,3,2,3,1,0],label:'C7 形'},{base:2,frets:[-1,-1,0,2,1,2],label:'D7 形'}],
+  'maj7'  :[{base:4,frets:[0,2,1,1,0,0],label:'E 形'},{base:9,frets:[-1,0,2,1,2,0],label:'A 形'},{base:0,frets:[-1,3,2,0,0,0],label:'C 形'},{base:2,frets:[-1,-1,0,2,2,2],label:'D 形'}],
+  'm7'    :[{base:4,frets:[0,2,0,0,0,0],label:'E 形'},{base:9,frets:[-1,0,2,0,1,0],label:'A 形'},{base:2,frets:[-1,-1,0,2,1,1],label:'Dm7 形'}],
   'mMaj7' :[{base:4,frets:[0,2,1,0,0,0],label:'E 形'},{base:9,frets:[-1,0,2,1,1,0],label:'A 形'}],
-  'sus2'  :[{base:9,frets:[-1,0,2,2,0,0],label:'A 形'}],
-  'sus4'  :[{base:4,frets:[0,2,2,2,0,0],label:'E 形'},{base:9,frets:[-1,0,2,2,3,0],label:'A 形'}],
+  'sus2'  :[{base:9,frets:[-1,0,2,2,0,0],label:'A 形'},{base:2,frets:[-1,-1,0,2,3,0],label:'D 形'}],
+  'sus4'  :[{base:4,frets:[0,2,2,2,0,0],label:'E 形'},{base:9,frets:[-1,0,2,2,3,0],label:'A 形'},{base:2,frets:[-1,-1,0,2,3,3],label:'D 形'}],
   '7sus4' :[{base:4,frets:[0,2,0,2,0,0],label:'E 形'},{base:9,frets:[-1,0,2,0,3,0],label:'A 形'}],
   '5'     :[{base:4,frets:[0,2,2,-1,-1,-1],label:'E 形'},{base:9,frets:[-1,0,2,2,-1,-1],label:'A 形'}],
   '6'     :[{base:4,frets:[0,2,2,1,2,0],label:'E 形'},{base:9,frets:[-1,0,2,2,2,2],label:'A 形'}],
@@ -392,9 +392,21 @@ const pretty=n=>n.replace(/#/g,'♯').replace(/b/g,'♭');
 
 /* ================= 音訊 ================= */
 let actx=null;
+/* 行動裝置（iOS/Android）需在使用者觸控手勢中解鎖 AudioContext */
+function unlockAudio(){
+  actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+  if(actx.state!=='running')actx.resume().catch(()=>{});
+  const b=actx.createBuffer(1,1,22050), s=actx.createBufferSource();
+  s.buffer=b; s.connect(actx.destination); s.start(0);
+}
+document.addEventListener('touchend',unlockAudio,{once:true,passive:true});
+document.addEventListener('click',unlockAudio,{once:true});
 function playMidi(midi, when=0){
   actx=actx||new (window.AudioContext||window.webkitAudioContext)();
-  if(actx.state==='suspended')actx.resume();
+  if(actx.state!=='running'){ actx.resume().then(()=>scheduleNote(midi,when)).catch(()=>{}); return; }
+  scheduleNote(midi,when);
+}
+function scheduleNote(midi, when){
   const t=actx.currentTime+when;
   const freq=440*Math.pow(2,(midi-69)/12);
   const g=actx.createGain(), filt=actx.createBiquadFilter();
@@ -539,11 +551,12 @@ function diagramSVG(frets, rootPc){
   const maxF=fretted.length?Math.max(...fretted):1;
   const minF=fretted.length?Math.min(...fretted):1;
   const base=maxF<=4?1:minF;
-  const W=160,H=200,left=26,top=42,cw=(W-left-16)/5,rh=(H-top-14)/4;
+  const nRows=Math.max(4,maxF-base+1); // 跨度大的指型自動加高，避免音點超出格線
+  const W=160,left=26,top=42,cw=(W-left-16)/5,rh=36,H=top+nRows*rh+14;
   let s=`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   for(let i=0;i<6;i++){const x=left+i*cw;
-    s+=`<line x1="${x}" y1="${top}" x2="${x}" y2="${top+4*rh}" stroke="#A89F8D" stroke-width="1"/>`;}
-  for(let r=0;r<=4;r++){const y=top+r*rh;
+    s+=`<line x1="${x}" y1="${top}" x2="${x}" y2="${top+nRows*rh}" stroke="#A89F8D" stroke-width="1"/>`;}
+  for(let r=0;r<=nRows;r++){const y=top+r*rh;
     s+=`<line x1="${left}" y1="${y}" x2="${left+5*cw}" y2="${y}" stroke="#A89F8D" stroke-width="${r===0&&base===1?4:1}"/>`;}
   if(base>1) s+=`<text x="${left-6}" y="${top+rh*0.6}" text-anchor="end" font-size="11" fill="#8C8678">${base}fr</text>`;
   for(let i=0;i<6;i++){
@@ -578,7 +591,8 @@ const OSTINATO={
   '0|major':{ // C 大調（頑固音：開放 G、E 弦）
     '0|' :[ {frets:[-1,3,2,0,3,0], tip:'add9・開放 G/E'},
             {frets:[-1,3,2,0,0,0], tip:'maj7・開放 G/E'} ],
-    '5|' :[ {frets:[-1,-1,3,2,1,0], tip:'maj7（開放E）'} ],
+    '5|' :[ {frets:[-1,-1,3,0,1,0], tip:'maj9 色彩・開放 G'},
+            {frets:[-1,-1,3,0,1,-1], tip:'開放 G・三音'} ],
     '7|' :[ {frets:[3,-1,0,0,3,3], tip:'G5 drone（無三音）'} ],
     '4|m':[ {frets:[0,2,2,0,3,0], tip:'m7・開放 G/E'} ],
     '9|m':[ {frets:[-1,0,7,5,0,0], tip:'add9 色彩'} ],
@@ -589,6 +603,11 @@ const OSTINATO={
     '9|' :[ {frets:[-1,0,2,2,3,0], tip:'sus4・A/D 頑固音'} ],
     '11|m':[ {frets:[-1,2,0,2,3,0], tip:'m7/11・A/D 頑固音'} ],
     '6|m':[ {frets:[2,0,2,2,2,0], tip:'m7・開放 A/E'} ],
+  },
+  '4|major':{ // E 大調（頑固音：開放 B、E 弦＝5/1度）
+    '6|m':[ {frets:[2,0,2,2,0,0], tip:'m7/11・開放 B/E'} ],
+    '8|m':[ {frets:[4,-1,4,4,0,0], tip:'m7・開放 B/E'} ],
+    '1|m':[ {frets:[-1,4,6,6,0,0], tip:'m7・開放 B/E'} ],
   },
 };
 function pickTones(iv){
@@ -673,7 +692,7 @@ function renderQuery(){
     const lib=OSTINATO[`${parseNote(keyTonic)}|${keyMode}`];
     vs=((lib&&lib[`${rootPc}|${sx}`])||[]).map(e=>({frets:e.frets, label:e.tip}));
     extra=`<div class="hint" style="width:100%">頑固音指型（${pretty(keyTonic)} ${keyMode==='major'?'大調':'小調'}）：固定的持續音（drone）讓和弦移動時保有共同音。</div>`;
-    empty=lib?'此和弦在本調暫無內建頑固音指型。':'頑固音曲庫目前提供 C、G、D 大調——請先在上方「調性」切換。';
+    empty=lib?'此和弦在本調暫無內建頑固音指型。':'頑固音曲庫目前提供 C、G、D、E 大調——請先在上方「調性」切換。';
   }else{
     const tpls=TEMPLATES[sx]||[];
     vs=tpls.map(t=>{
