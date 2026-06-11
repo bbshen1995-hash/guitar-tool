@@ -593,9 +593,11 @@ const OSTINATO={
             {frets:[-1,3,2,0,0,0], tip:'maj7・開放 G/E'} ],
     '5|' :[ {frets:[-1,-1,3,0,1,0], tip:'maj9 色彩・開放 G'},
             {frets:[-1,-1,3,0,1,-1], tip:'開放 G・三音'} ],
-    '7|' :[ {frets:[3,-1,0,0,3,3], tip:'G5 drone（無三音）'} ],
+    '7|' :[ {frets:[3,-1,0,0,3,3], tip:'G5 drone（無三音）'},
+            {frets:[-1,-1,5,0,3,-1], tip:'開放 G・同 F 結構'} ],
     '4|m':[ {frets:[0,2,2,0,3,0], tip:'m7・開放 G/E'} ],
-    '9|m':[ {frets:[-1,0,7,5,0,0], tip:'add9 色彩'} ],
+    '9|m':[ {frets:[-1,0,7,5,0,0], tip:'add9 色彩'},
+            {frets:[-1,-1,7,0,5,-1], tip:'開放 G・同 F 結構'} ],
   },
   '2|major':{ // D 大調（頑固音：3弦2格A＋2弦3格D＝1/5度）
     '2|' :[ {frets:[-1,-1,0,2,3,0], tip:'add9・A/D 頑固音'} ],
@@ -608,6 +610,8 @@ const OSTINATO={
     '6|m':[ {frets:[2,0,2,2,0,0], tip:'m7/11・開放 B/E'} ],
     '8|m':[ {frets:[4,-1,4,4,0,0], tip:'m7・開放 B/E'} ],
     '1|m':[ {frets:[-1,4,6,6,0,0], tip:'m7・開放 B/E'} ],
+    '9|' :[ {frets:[-1,0,2,2,0,0], tip:'A 形開放平移・開放 B/E'} ],
+    '11|':[ {frets:[-1,2,4,4,0,0], tip:'A 形開放平移・開放 B/E'} ],
   },
 };
 function pickTones(iv){
@@ -686,7 +690,21 @@ function renderQuery(){
   }else if(instrument==='electric'&&voiceMode!=='std'){
     const r=nNoteVoicings(rootPc, f.iv, +voiceMode);
     vs=r.voicings;
-    extra=`<div class="hint" style="width:100%">${voiceMode}音精簡指型（各弦組全部轉位，由低至高把位）・使用音：${r.used.map(t=>IV_NAME[t]).join('、')}${r.omitted?'，其餘音省略':''}<br>⭐＝CCM／敬拜常用把位（高音弦組、約 4–8 格的中把位）</div>`;
+    if(voiceMode==='3'){ // CCM 常用 1-5-1 把位（無三音）：根音在 3 弦／4 弦
+      const n3=(rootPc-7+12)%12, n4=(rootPc-2+12)%12;
+      if(n3+3<=fretCount())vs.push({frets:[-1,-1,-1,n3,n3+3,n3+3], label:'1-5-1・根音3弦', forceCcm:true});
+      if(n4+3<=fretCount())vs.push({frets:[-1,-1,n4,n4+2,n4+3,-1], label:'1-5-1・根音4弦', forceCcm:true});
+    }
+    vs.forEach(v=>{ // 排序權重：⭐CCM → 根音在 3/4 弦 → 把位低至高
+      const fIdx=v.frets.findIndex(x=>x>=0);
+      const snd=v.frets.filter(x=>x>=0);
+      v.pos=Math.min(...snd);
+      const uniform=snd.length>1&&snd.every(x=>x===snd[0]);
+      v.ccm=!!v.forceCcm||(fIdx>=2&&v.pos>=4&&v.pos<=9)||(fIdx===2&&v.frets[5]<0&&uniform);
+      v.root34=v.frets.some((fr,i)=>fr>=0&&(i===2||i===3)&&(SM_LOW[i]+fr)%12===rootPc);
+    });
+    vs.sort((a,b)=>(b.ccm-a.ccm)||(b.root34-a.root34)||(a.pos-b.pos));
+    extra=`<div class="hint" style="width:100%">${voiceMode}音精簡指型・使用音：${r.used.map(t=>IV_NAME[t]).join('、')}${r.omitted?'，其餘音省略':''}<br>⭐＝CCM／敬拜常用（已排最前；根音在 3/4 弦者優先）</div>`;
     empty='在此弦組範圍內找不到合適的精簡指型。';
   }else if(instrument==='acoustic'&&acVoiceMode==='ost'){
     const lib=OSTINATO[`${parseNote(keyTonic)}|${keyMode}`];
@@ -702,10 +720,7 @@ function renderQuery(){
       .sort((a,b)=>Math.min(...a.frets.filter(x=>x>=0))-Math.min(...b.frets.filter(x=>x>=0))); // 開放/低把位優先
   }
   $('diagrams').innerHTML=extra+(vs.length?vs.map(v=>{
-    const fIdx=v.frets.findIndex(x=>x>=0);
-    const sounding=v.frets.filter(x=>x>=0);
-    const pos=Math.min(...sounding);
-    const ccm=instrument==='electric'&&voiceMode!=='std'&&fIdx>=2&&pos>=4&&pos<=8;
+    const ccm=!!v.ccm;
     return `<div class="dia${ccm?' ccm':''}" data-frets="${v.frets.join(',')}">${ccm?'<div class="ccm-tag">⭐ CCM 常用</div>':''}${diagramSVG(v.frets,rootPc)}<div class="cap"><b style="color:var(--lavender);font-size:14.5px">${voicingDeg(v.frets,rootPc)}</b>　${v.label}<br>${v.frets.map(x=>x<0?'×':x).join(' - ')}　🔊</div></div>`;
   }).join(''):`<div class="hint">${empty}</div>`);
   syncDegFromChord(); // 和弦 → 級數 同步
